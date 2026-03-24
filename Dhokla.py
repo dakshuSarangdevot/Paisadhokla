@@ -33,16 +33,16 @@ last_query = {}
 app = Flask(name)
 
 def load_users():
-    global users
-    try:
-        with open("users.json") as f:
-            users = json.load(f)
-    except:
-        users = {}
+global users
+try:
+with open("users.json") as f:
+users = json.load(f)
+except:
+users = {}
 
 def save_users():
-    with open("users.json", "w") as f:
-        json.dump(users, f)
+with open("users.json", "w") as f:
+json.dump(users, f)
 
 def get_points(uid):
 uid = str(uid)
@@ -54,13 +54,15 @@ def add_points(uid, amount):
 uid = str(uid)
 if uid not in users:
 users[uid] = {"points": 0}
+
 users[uid]["points"] += amount
 save_users()
 
 def remove_points(uid, amount):
 uid = str(uid)
+
 if uid not in users:
-users[uid] = {"points": 0}
+    users[uid] = {"points": 0}
 
 users[uid]["points"] -= amount
 
@@ -89,10 +91,12 @@ except:
 
 request_config = HTTPXRequest(connect_timeout=20, read_timeout=20)
 
-telegram_app = Application.builder()
+telegram_app = (
+Application.builder()
 .token(BOT_TOKEN)
 .request(request_config)
 .build()
+)
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -185,7 +189,6 @@ ID: {user.id}
 """
 
     await context.bot.send_message(OWNER_CHAT_ID, msg)
-
     return
 
 await update.message.reply_text(
@@ -282,4 +285,4 @@ load_users()
 loop.run_until_complete(telegram_app.initialize())
 loop.run_until_complete(
 telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    
+)
