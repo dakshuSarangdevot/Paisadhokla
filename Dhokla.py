@@ -33,12 +33,12 @@ last_query = {}
 app = Flask(name)
 
 def load_users():
-global users
-try:
-with open("users.json") as f:
-users = json.load(f)
-except:
-users = {}
+    global users
+    try:
+        with open("users.json") as f:
+            users = json.load(f)
+    except:
+        users = {}
 
 def save_users():
 with open("users.json", "w") as f:
