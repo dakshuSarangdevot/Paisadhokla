@@ -5,7 +5,13 @@ import asyncio
 import httpx
 from flask import Flask, request
 
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    KeyboardButtonRequestUser
+)
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -33,7 +39,7 @@ approved_users = set()
 protected_ids = set()
 last_query = {}
 
-# ---------------- FILE STORAGE ----------------
+# ---------------- STORAGE ----------------
 
 def load_json(file, default):
     try:
@@ -48,7 +54,6 @@ def save_json(file, data):
 
 def load_data():
     global users, approved_users, protected_ids
-
     users = load_json("users.json", {})
     approved_users.update(load_json("approved.json", []))
     protected_ids.update(load_json("protected.json", []))
@@ -63,36 +68,25 @@ def save_lists():
 # ---------------- POINTS ----------------
 
 def get_points(uid):
-
     uid = str(uid)
-
     if uid not in users:
         users[uid] = {"points": 0}
-
     return users[uid]["points"]
 
 def add_points(uid, amount):
-
     uid = str(uid)
-
     if uid not in users:
         users[uid] = {"points": 0}
-
     users[uid]["points"] += amount
     save_users()
 
 def remove_points(uid, amount):
-
     uid = str(uid)
-
     if uid not in users:
         users[uid] = {"points": 0}
-
     users[uid]["points"] -= amount
-
     if users[uid]["points"] < 0:
         users[uid]["points"] = 0
-
     save_users()
 
 # ---------------- API ----------------
@@ -110,7 +104,7 @@ async def fetch_api(target):
 
             data = r.json()
 
-            if "result" not in data:
+            if not data or "result" not in data:
                 return None
 
             return data["result"]
@@ -172,33 +166,49 @@ async def lookup(update, context, target):
 
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# ---------------- COMMANDS ----------------
+# ---------------- START ----------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
+    balance = get_points(user.id)
 
     keyboard = [
-        [KeyboardButton("🔎 Lookup Database")],
-        [KeyboardButton("📊 Stats")]
+        [
+            KeyboardButton(
+                "🎯 Target",
+                request_user=KeyboardButtonRequestUser(
+                    request_id=1,
+                    user_is_bot=False
+                )
+            )
+        ],
+        [
+            KeyboardButton("📊 Stats"),
+            KeyboardButton("🆘 Help")
+        ]
     ]
 
     markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-    welcome = """
-✨ Welcome to OSINT Lookup Bot
+    msg = f"""
+✨ WELCOME TO OSINT BOT
 
-Use this bot to search Telegram IDs.
+👤 User: {user.first_name}
+🆔 UID: `{user.id}`
+💰 Balance: `{balance}` pts
 
-🔎 Lookup Database
-📊 Stats
+Send:
+• Telegram ID
+• @username
+• or use Target button
 """
+
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=markup)
 
     if user.id not in approved_users:
 
-        await update.message.reply_text(welcome, reply_markup=markup)
-
-        msg = f"""
+        admin_msg = f"""
 Access Request
 
 {user.first_name}
@@ -208,11 +218,17 @@ ID: {user.id}
 /approve {user.id}
 """
 
-        await context.bot.send_message(OWNER_CHAT_ID, msg)
+        await context.bot.send_message(OWNER_CHAT_ID, admin_msg)
 
-        return
+# ---------------- USER PICKER ----------------
 
-    await update.message.reply_text(welcome, reply_markup=markup)
+async def user_shared(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    uid = update.message.user_shared.user_id
+
+    await lookup(update, context, str(uid))
+
+# ---------------- STATS ----------------
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -222,11 +238,74 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = f"""
 📊 YOUR STATS
 
-User ID: {uid}
-Points: {balance}
+User ID: `{uid}`
+Points: `{balance}`
+"""
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+# ---------------- HELP ----------------
+
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    msg = """
+🆘 COMMANDS
+
+/start - Start bot
+/help - Show help
+/stats - Show balance
+
+Admin:
+/approve ID
+/addpoints ID AMOUNT
+/protectid ID
+/admin
+/broadcast MESSAGE
 """
 
     await update.message.reply_text(msg)
+
+# ---------------- ADMIN ----------------
+
+async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    msg = f"""
+ADMIN PANEL
+
+Users: {len(users)}
+Approved: {len(approved_users)}
+Protected: {len(protected_ids)}
+"""
+
+    await update.message.reply_text(msg)
+
+# ---------------- BROADCAST ----------------
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    message = " ".join(context.args)
+
+    sent = 0
+
+    for uid in users:
+
+        try:
+
+            await context.bot.send_message(uid, message)
+            sent += 1
+
+        except:
+            pass
+
+    await update.message.reply_text(f"Broadcast sent to {sent} users")
+
+# ---------------- OWNER COMMANDS ----------------
 
 async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -234,11 +313,10 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     uid = int(context.args[0])
-
     approved_users.add(uid)
     save_lists()
 
-    await update.message.reply_text(f"Approved {uid}")
+    await update.message.reply_text("User approved")
 
 async def addpoints(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -262,6 +340,8 @@ async def protectid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("ID protected")
 
+# ---------------- TEXT HANDLER ----------------
+
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text
@@ -270,21 +350,54 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await stats(update, context)
         return
 
+    if text == "🆘 Help":
+        await help_cmd(update, context)
+        return
+
+    if text.startswith("@"):
+
+        username = text.replace("@", "")
+
+        try:
+
+            chat = await context.bot.get_chat(f"@{username}")
+            uid = chat.id
+
+            await lookup(update, context, str(uid))
+
+        except:
+
+            await update.message.reply_text("❌ Cannot resolve username")
+
+        return
+
     if text.isdigit():
+
         await lookup(update, context, text)
 
 # ---------------- HANDLERS ----------------
 
 telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(CommandHandler("help", help_cmd))
+telegram_app.add_handler(CommandHandler("stats", stats))
+telegram_app.add_handler(CommandHandler("admin", admin))
+telegram_app.add_handler(CommandHandler("broadcast", broadcast))
 telegram_app.add_handler(CommandHandler("approve", approve))
 telegram_app.add_handler(CommandHandler("addpoints", addpoints))
 telegram_app.add_handler(CommandHandler("protectid", protectid))
+
+telegram_app.add_handler(
+    MessageHandler(filters.StatusUpdate.USER_SHARED, user_shared)
+)
 
 telegram_app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)
 )
 
 # ---------------- WEBHOOK ----------------
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
 @app.route("/")
 def home():
@@ -293,28 +406,32 @@ def home():
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
 
-    update = Update.de_json(
-        request.get_json(force=True),
-        telegram_app.bot
-    )
+    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
 
-    asyncio.run(
+    loop.run_until_complete(
         telegram_app.process_update(update)
     )
 
     return "ok"
 
-# ---------------- START BOT ----------------
+# ---------------- START ----------------
 
 load_data()
 
 async def setup():
+
     await telegram_app.initialize()
 
     try:
-        await telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
+
+        await telegram_app.bot.set_webhook(
+            f"{WEBHOOK_URL}/{BOT_TOKEN}"
+        )
+
         print("Webhook set successfully")
+
     except Exception as e:
+
         print("Webhook error:", e)
 
-asyncio.run(setup())
+loop.run_until_complete(setup())
