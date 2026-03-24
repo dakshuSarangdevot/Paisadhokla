@@ -30,7 +30,11 @@ app = Flask(__name__)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
 import asyncio
-asyncio.run(telegram_app.initialize())
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+loop.run_until_complete(telegram_app.initialize())
 
 async def lookup(update, context, target):
 
