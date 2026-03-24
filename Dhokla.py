@@ -210,14 +210,12 @@ telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_ha
 telegram_app.add_handler(InlineQueryHandler(inline_query))
 
 
-
-
-
 import asyncio
+
+loop = asyncio.get_event_loop()
 
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    asyncio.run(telegram_app.process_update(update))
+    loop.create_task(telegram_app.process_update(update))
     return "ok"
-    
