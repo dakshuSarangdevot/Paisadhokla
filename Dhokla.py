@@ -26,7 +26,7 @@ last_query = {}
 
 app = Flask(name)
 
----------- FILE STORAGE ----------
+#---------- FILE STORAGE ----------
 
 def load_users():
 global users
