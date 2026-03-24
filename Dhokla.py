@@ -1,8 +1,11 @@
 import os
 import re
 import time
+import json
+import asyncio
 import requests
 from flask import Flask, request
+
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import (
     Application,
@@ -20,27 +23,44 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 API_URL = "https://ayaanmods.site/tg2num.php"
 API_KEY = "annonymoustgtonum"
 
-approved_users = set()
-banned_ids = set()
+RATE_LIMIT = 5
 last_query = {}
 
-RATE_LIMIT = 5
+USERS_FILE = "approved_users.json"
+BANNED_FILE = "banned_ids.json"
+
+
+def load_set(file):
+    if not os.path.exists(file):
+        return set()
+    with open(file, "r") as f:
+        return set(json.load(f))
+
+
+def save_set(file, data):
+    with open(file, "w") as f:
+        json.dump(list(data), f)
+
+
+approved_users = load_set(USERS_FILE)
+banned_ids = load_set(BANNED_FILE)
 
 app = Flask(__name__)
+
+# Telegram app
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-import asyncio
-
+# Event loop
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
-
 loop.run_until_complete(telegram_app.initialize())
+
 
 async def lookup(update, context, target):
 
     user = update.effective_user
 
-    if target in banned_ids:
+    if str(target) in banned_ids:
         await update.message.reply_text("🚫 This ID is blocked.")
         return
 
@@ -95,7 +115,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         await context.bot.send_message(OWNER_CHAT_ID, msg)
-
         return
 
     await update.message.reply_text("Send Telegram ID or username.")
@@ -107,7 +126,9 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     uid = int(context.args[0])
+
     approved_users.add(uid)
+    save_set(USERS_FILE, approved_users)
 
     await update.message.reply_text(f"Approved {uid}")
 
@@ -119,8 +140,8 @@ async def disapprove(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = int(context.args[0])
 
-    if uid in approved_users:
-        approved_users.remove(uid)
+    approved_users.discard(uid)
+    save_set(USERS_FILE, approved_users)
 
     await update.message.reply_text(f"Removed {uid}")
 
@@ -131,6 +152,7 @@ async def banid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     banned_ids.add(context.args[0])
+    save_set(BANNED_FILE, banned_ids)
 
     await update.message.reply_text("ID banned")
 
@@ -140,7 +162,8 @@ async def unbanid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_CHAT_ID:
         return
 
-    banned_ids.remove(context.args[0])
+    banned_ids.discard(context.args[0])
+    save_set(BANNED_FILE, banned_ids)
 
     await update.message.reply_text("ID unbanned")
 
@@ -214,12 +237,14 @@ telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_ha
 telegram_app.add_handler(InlineQueryHandler(inline_query))
 
 
-import asyncio
+@app.route("/")
+def home():
+    return "Bot running"
 
-loop = asyncio.get_event_loop()
 
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
+
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    loop.create_task(telegram_app.process_update(update))
+    loop.run_until_complete(telegram_app.process_update(update))
     return "ok"
