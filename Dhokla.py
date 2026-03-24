@@ -16,6 +16,8 @@ from telegram.ext import (
     filters
 )
 
+from telegram.request import HTTPXRequest
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID"))
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
@@ -47,13 +49,34 @@ banned_ids = load_set(BANNED_FILE)
 
 app = Flask(__name__)
 
-# Telegram app
-telegram_app = Application.builder().token(BOT_TOKEN).build()
+# Telegram request config (prevents timeout issues)
+tg_request = HTTPXRequest(connect_timeout=20, read_timeout=20, write_timeout=20)
 
-# Event loop
+telegram_app = Application.builder()\
+    .token(BOT_TOKEN)\
+    .request(tg_request)\
+    .build()
+
+# Create event loop
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
+
 loop.run_until_complete(telegram_app.initialize())
+
+
+def fetch_api(target):
+    for _ in range(2):
+        try:
+            r = requests.get(API_URL, params={
+                "key": API_KEY,
+                "id": target
+            }, timeout=10)
+
+            return r.text
+        except:
+            time.sleep(1)
+
+    return "⚠ API error"
 
 
 async def lookup(update, context, target):
@@ -72,16 +95,7 @@ async def lookup(update, context, target):
 
     last_query[user.id] = now
 
-    try:
-        r = requests.get(API_URL, params={
-            "key": API_KEY,
-            "id": target
-        }, timeout=10)
-
-        data = r.text
-
-    except:
-        data = "⚠ API error"
+    data = fetch_api(target)
 
     await update.message.reply_text(data)
 
@@ -115,6 +129,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         await context.bot.send_message(OWNER_CHAT_ID, msg)
+
         return
 
     await update.message.reply_text("Send Telegram ID or username.")
@@ -204,16 +219,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query:
         return
 
-    try:
-        r = requests.get(API_URL, params={
-            "key": API_KEY,
-            "id": query
-        })
-
-        result = r.text
-
-    except:
-        result = "API error"
+    result = fetch_api(query)
 
     results = [
         InlineQueryResultArticle(
@@ -246,5 +252,9 @@ def home():
 def webhook():
 
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    loop.run_until_complete(telegram_app.process_update(update))
+
+    loop.run_until_complete(
+        telegram_app.process_update(update)
+    )
+
     return "ok"
