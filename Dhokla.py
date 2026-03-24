@@ -31,47 +31,77 @@ last_query = {}
 
 app = Flask(__name__)
 
-# ---------------- USERS STORAGE ----------------
+telegram_app = Application.builder().token(BOT_TOKEN).build()
+
+# ---------------- STORAGE ----------------
+
+def load_json(file):
+    try:
+        with open(file) as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_json(file,data):
+    with open(file,"w") as f:
+        json.dump(data,f)
 
 def load_users():
     global users
-    try:
-        with open("users.json") as f:
-            users = json.load(f)
-    except:
-        users = {}
+    users = load_json("users.json")
 
 def save_users():
-    with open("users.json", "w") as f:
-        json.dump(users, f)
+    save_json("users.json",users)
+
+def load_lists():
+    global approved_users,protected_ids
+
+    try:
+        with open("approved.json") as f:
+            approved_users.update(json.load(f))
+    except:
+        pass
+
+    try:
+        with open("protected.json") as f:
+            protected_ids.update(json.load(f))
+    except:
+        pass
+
+def save_lists():
+    save_json("approved.json",list(approved_users))
+    save_json("protected.json",list(protected_ids))
 
 def get_points(uid):
-    uid = str(uid)
+
+    uid=str(uid)
 
     if uid not in users:
-        users[uid] = {"points": 0}
+        users[uid]={"points":0}
 
     return users[uid]["points"]
 
-def add_points(uid, amount):
-    uid = str(uid)
+def add_points(uid,amount):
+
+    uid=str(uid)
 
     if uid not in users:
-        users[uid] = {"points": 0}
+        users[uid]={"points":0}
 
-    users[uid]["points"] += amount
+    users[uid]["points"]+=amount
     save_users()
 
-def remove_points(uid, amount):
-    uid = str(uid)
+def remove_points(uid,amount):
+
+    uid=str(uid)
 
     if uid not in users:
-        users[uid] = {"points": 0}
+        users[uid]={"points":0}
 
-    users[uid]["points"] -= amount
+    users[uid]["points"]-=amount
 
-    if users[uid]["points"] < 0:
-        users[uid]["points"] = 0
+    if users[uid]["points"]<0:
+        users[uid]["points"]=0
 
     save_users()
 
@@ -80,13 +110,14 @@ def remove_points(uid, amount):
 def fetch_api(target):
 
     try:
-        r = requests.get(
+
+        r=requests.get(
             API_URL,
-            params={"key": API_KEY, "id": target},
+            params={"key":API_KEY,"id":target},
             timeout=10
         )
 
-        data = r.json()
+        data=r.json()
 
         if "result" not in data:
             return None
@@ -98,11 +129,9 @@ def fetch_api(target):
 
 # ---------------- BOT ----------------
 
-telegram_app = Application.builder().token(BOT_TOKEN).build()
+async def lookup(update,context,target):
 
-async def lookup(update, context, target):
-
-    user = update.effective_user
+    user=update.effective_user
 
     if target in protected_ids:
         await update.message.reply_text("🚫 This ID is protected.")
@@ -112,34 +141,34 @@ async def lookup(update, context, target):
         await update.message.reply_text("⛔ Not approved.")
         return
 
-    now = time.time()
+    now=time.time()
 
-    if user.id in last_query and now - last_query[user.id] < RATE_LIMIT:
+    if user.id in last_query and now-last_query[user.id]<RATE_LIMIT:
         await update.message.reply_text("⏳ Slow down.")
         return
 
-    last_query[user.id] = now
+    last_query[user.id]=now
 
-    points = get_points(user.id)
+    points=get_points(user.id)
 
-    if points < SEARCH_COST:
+    if points<SEARCH_COST:
         await update.message.reply_text("❌ Not enough points.")
         return
 
-    remove_points(user.id, SEARCH_COST)
+    remove_points(user.id,SEARCH_COST)
 
-    result = fetch_api(target)
+    result=fetch_api(target)
 
     if not result:
         await update.message.reply_text("❌ No record found.")
         return
 
-    tg_id = result["tg_id"]
-    number = result["number"]
-    country = result["country"]
-    code = result["country_code"]
+    tg_id=result["tg_id"]
+    number=result["number"]
+    country=result["country"]
+    code=result["country_code"]
 
-    msg = f"""
+    msg=f"""
 📡 *OSINT RESULT*
 
 ━━━━━━━━━━━━━━
@@ -155,20 +184,20 @@ async def lookup(update, context, target):
 ━━━━━━━━━━━━━━
 """
 
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    await update.message.reply_text(msg,parse_mode="Markdown")
 
 # ---------------- COMMANDS ----------------
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    user = update.effective_user
+    user=update.effective_user
 
-    keyboard = [
+    keyboard=[
         [KeyboardButton("🔎 Lookup Database")],
         [KeyboardButton("📊 Stats")]
     ]
 
-    markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    markup=ReplyKeyboardMarkup(keyboard,resize_keyboard=True)
 
     if user.id not in approved_users:
 
@@ -177,7 +206,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=markup
         )
 
-        msg = f"""
+        msg=f"""
 Access Request
 
 {user.first_name}
@@ -187,7 +216,7 @@ ID: {user.id}
 /approve {user.id}
 """
 
-        await context.bot.send_message(OWNER_CHAT_ID, msg)
+        await context.bot.send_message(OWNER_CHAT_ID,msg)
         return
 
     await update.message.reply_text(
@@ -195,12 +224,12 @@ ID: {user.id}
         reply_markup=markup
     )
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def stats(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    uid = update.effective_user.id
-    balance = get_points(uid)
+    uid=update.effective_user.id
+    balance=get_points(uid)
 
-    msg = f"""
+    msg=f"""
 📊 YOUR STATS
 
 User ID: {uid}
@@ -209,57 +238,60 @@ Points: {balance}
 
     await update.message.reply_text(msg)
 
-async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def approve(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    if update.effective_user.id != OWNER_CHAT_ID:
+    if update.effective_user.id!=OWNER_CHAT_ID:
         return
 
-    uid = int(context.args[0])
+    uid=int(context.args[0])
+
     approved_users.add(uid)
+    save_lists()
 
     await update.message.reply_text(f"Approved {uid}")
 
-async def addpoints(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def addpoints(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    if update.effective_user.id != OWNER_CHAT_ID:
+    if update.effective_user.id!=OWNER_CHAT_ID:
         return
 
-    uid = int(context.args[0])
-    pts = int(context.args[1])
+    uid=int(context.args[0])
+    pts=int(context.args[1])
 
-    add_points(uid, pts)
+    add_points(uid,pts)
 
     await update.message.reply_text("Points added")
 
-async def protectid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def protectid(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    if update.effective_user.id != OWNER_CHAT_ID:
+    if update.effective_user.id!=OWNER_CHAT_ID:
         return
 
     protected_ids.add(context.args[0])
+    save_lists()
 
     await update.message.reply_text("ID protected")
 
-async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text
+    text=update.message.text
 
-    if text == "📊 Stats":
-        await stats(update, context)
+    if text=="📊 Stats":
+        await stats(update,context)
         return
 
     if text.isdigit():
-        await lookup(update, context, text)
+        await lookup(update,context,text)
 
 # ---------------- HANDLERS ----------------
 
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CommandHandler("approve", approve))
-telegram_app.add_handler(CommandHandler("addpoints", addpoints))
-telegram_app.add_handler(CommandHandler("protectid", protectid))
+telegram_app.add_handler(CommandHandler("start",start))
+telegram_app.add_handler(CommandHandler("approve",approve))
+telegram_app.add_handler(CommandHandler("addpoints",addpoints))
+telegram_app.add_handler(CommandHandler("protectid",protectid))
 
 telegram_app.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)
+    MessageHandler(filters.TEXT & ~filters.COMMAND,text_handler)
 )
 
 # ---------------- WEBHOOK ----------------
@@ -268,10 +300,10 @@ telegram_app.add_handler(
 def home():
     return "Bot running"
 
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+@app.route(f"/{BOT_TOKEN}",methods=["POST"])
 async def webhook():
 
-    update = Update.de_json(
+    update=Update.de_json(
         request.get_json(force=True),
         telegram_app.bot
     )
@@ -283,9 +315,20 @@ async def webhook():
 # ---------------- STARTUP ----------------
 
 load_users()
+load_lists()
 
-async def setup():
-    await telegram_app.initialize()
-    await telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
+@app.before_first_request
+def start_bot():
 
-asyncio.get_event_loop().run_until_complete(setup())
+    loop=asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def setup():
+
+        await telegram_app.initialize()
+
+        await telegram_app.bot.set_webhook(
+            f"{WEBHOOK_URL}/{BOT_TOKEN}"
+        )
+
+    loop.run_until_complete(setup())
