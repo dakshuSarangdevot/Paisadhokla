@@ -220,9 +220,8 @@ def home():
     return "Bot running"
 
 
-if __name__ == "__main__":
+import asyncio
 
-    telegram_app.initialize()
-    telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
-
+asyncio.run(telegram_app.initialize())
+asyncio.run(telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}"))
     
