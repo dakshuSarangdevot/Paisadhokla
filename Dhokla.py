@@ -41,8 +41,8 @@ def load_users():
         users = {}
 
 def save_users():
-with open("users.json", "w") as f:
-json.dump(users, f)
+    with open("users.json", "w") as f:
+        json.dump(users, f)
 
 def get_points(uid):
 uid = str(uid)
