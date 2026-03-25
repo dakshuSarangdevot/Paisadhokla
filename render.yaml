@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: dhokla-osint
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT Dhokla:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.5
+      - key: BOT_TOKEN
+        generateValue: true
+      - key: OWNER_CHAT_ID
+        generateValue: true
+      - key: WEBHOOK_URL
+        fromDatabase:
+          name: dhokla-osint
+          property: webhook
+    plan: starter
+    autoDeploy: false
