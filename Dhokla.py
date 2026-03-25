@@ -21,7 +21,7 @@ from telegram.constants import ParseMode as ParseModeConst
 # Logging
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(name)
+logger = logging.getLogger(__name__)
 
 # ENV VARS
 
@@ -45,7 +45,7 @@ PREMIUM_PACKAGES = [
 
 PAYMENT_REQUESTS = {}
 
-app = Flask(name)
+app = Flask(__name__)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
 # Thread-safe Database
