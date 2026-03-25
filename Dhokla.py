@@ -13,8 +13,9 @@ from telegram import (
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, ContextTypes,
-    CallbackQueryHandler, filters, ParseMode
+    CallbackQueryHandler, filters
 )
+from telegram.constants import ParseMode  # ← ADD THIS LINE
 from telegram.constants import ParseMode as ParseModeConst
 
 # Logging
