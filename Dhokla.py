@@ -21,6 +21,18 @@ from telegram.constants import ParseMode as ParseModeConst
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
+import asyncio
+import threading
+
+# Create one persistent event loop
+loop = asyncio.new_event_loop()
+
+def run_loop():
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+threading.Thread(target=run_loop, daemon=True).start()
+
 # Logging
 
 logging.basicConfig(level=logging.INFO)
