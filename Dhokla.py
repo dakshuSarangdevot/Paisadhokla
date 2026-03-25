@@ -68,6 +68,8 @@ PAYMENT_REQUESTS = {}
 PAYMENT_REQUESTS_LOCK = threading.Lock()
 
 app = Flask(__name__)
+
+init_db()
 telegram_app = None
 
 # Thread-safe Database with context manager
