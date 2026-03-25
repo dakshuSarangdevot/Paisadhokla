@@ -310,8 +310,8 @@ async def buy_package_callback(update, context):
 💎 **{package['points']} Points**
 💵 **₹{package['price']}**
 
-📱 **UPI:** yourupi@ybl
-📱 **PhonePe/Paytm:** 9876543210
+📱 **UPI:** sarangdevotarjunsingh9@okhdfc
+📱 **PhonePe/Paytm:** Contact Admin
 
 ✅ Send **screenshot** after payment!
     """
