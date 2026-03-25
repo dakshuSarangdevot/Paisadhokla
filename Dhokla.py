@@ -248,31 +248,51 @@ Total Points: {points}
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
 
-    update = Update.de_json(request.get_json(), telegram_app.bot)
-
-    asyncio.run(telegram_app.process_update(update))
-
-    return "ok"
-
-
-# ================= BOT INIT =================
-
-async def init():
-
     global telegram_app
 
-    init_db()
+    try:
 
-    telegram_app = Application.builder().token(BOT_TOKEN).build()
+        # Lazy initialization (fix for Render/Gunicorn)
+        if telegram_app is None:
 
-    telegram_app.add_handler(CommandHandler("start", start))
-    telegram_app.add_handler(CommandHandler("approve", approve))
-    telegram_app.add_handler(CommandHandler("addpoints", addpoints))
-    telegram_app.add_handler(CommandHandler("godstats", godstats))
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-    telegram_app.add_handler(MessageHandler(filters.TEXT, handle_text))
+            async def init():
+                global telegram_app
 
-    await telegram_app.initialize()
+                telegram_app = Application.builder().token(BOT_TOKEN).build()
+
+                telegram_app.add_handler(CommandHandler("start", start))
+                telegram_app.add_handler(CommandHandler("approve", approve))
+                telegram_app.add_handler(CommandHandler("addpoints", addpoints))
+                telegram_app.add_handler(CommandHandler("godstats", godstats))
+
+                telegram_app.add_handler(MessageHandler(filters.TEXT, handle_text))
+
+                await telegram_app.initialize()
+
+            loop.run_until_complete(init())
+
+        data = request.get_json()
+
+        update = Update.de_json(data, telegram_app.bot)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        loop.run_until_complete(
+            telegram_app.process_update(update)
+        )
+
+        return "OK"
+
+    except Exception as e:
+
+        logger.error(e)
+
+        return "ERROR", 500
+
 
     await telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
 
