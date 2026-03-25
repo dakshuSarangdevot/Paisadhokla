@@ -672,8 +672,8 @@ telegram_app.add_handler(CallbackQueryHandler(button_handler))
 
 
 # MESSAGE HANDLERS (specific → general)
-telegram_app.add_handler(MessageHandler(filters.StatusUpdate.USER_SHARED, handle_user_share))
 telegram_app.add_handler(MessageHandler(filters.PHOTO, payment_proof_handler))
+telegram_app.add_handler(MessageHandler(filters.StatusUpdate.USER_SHARED, handle_user_share))
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
 
