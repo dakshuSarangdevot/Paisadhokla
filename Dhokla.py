@@ -564,4 +564,217 @@ async def god_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             stats = {
                 'total_users': cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0],
-                'premium_users':
+                'premium_users': cursor.execute("SELECT COUNT(*) FROM users WHERE approved=1").fetchone()[0],
+                'total_points': cursor.execute("SELECT SUM(points) FROM users").fetchone()[0] or 0,
+                'today_searches': cursor.execute("SELECT COUNT(*) FROM logs WHERE date(timestamp)=date('now')").fetchone()[0],
+            }
+
+        with PAYMENT_REQUESTS_LOCK:
+            pending_payments = len([uid for uid, data in PAYMENT_REQUESTS.items() if data['status'] == 'pending'])
+
+        dashboard = f"""
+👑 GOD MODE v3.0 👑
+
+👥 Total Users: {stats['total_users']}
+💎 Premium: {stats['premium_users']}
+💰 Points Value: ₹{stats['total_points']//10:,}
+🔍 Today Searches: {stats['today_searches']}
+⏳ Pending Payments: {pending_payments}
+
+👇 Commands:
+/pending - Payment queue
+/broadcast MSG - Mass send
+/wipeall - NUKE DATABASE ⚠️
+"""
+        await update.message.reply_text(dashboard, parse_mode=ParseModeConst.MARKDOWN)
+    except Exception as e:
+        logger.error(f"God stats error: {e}")
+        await update.message.reply_text("❌ Stats error")
+
+async def pending_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    with PAYMENT_REQUESTS_LOCK:
+        if not PAYMENT_REQUESTS:
+            await update.message.reply_text("✅ **No pending payments**")
+            return
+
+        msg = "⏳ **PENDING PAYMENTS:**\n\n"
+        count = 0
+        for uid, data in PAYMENT_REQUESTS.items():
+            if data['status'] == 'pending':
+                pkg = data['package']
+                msg += f"• `{uid}` - {pkg['name']} (₹{pkg['price']})\n"
+                count += 1
+        
+        if count == 0:
+            msg = "✅ **No pending payments**"
+        else:
+            msg += f"\nTotal: {count}"
+
+    await update.message.reply_text(msg, parse_mode=ParseModeConst.MARKDOWN)
+
+async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /broadcast Your message", parse_mode=ParseModeConst.MARKDOWN)
+        return
+
+    message = " ".join(context.args)
+    sent = 0
+    failed = 0
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            users = cursor.execute("SELECT id FROM users WHERE approved=1").fetchall()
+
+        for user_row in users:
+            try:
+                await context.bot.send_message(user_row['id'], message)
+                sent += 1
+                await asyncio.sleep(0.05)  # Rate limit
+            except:
+                failed += 1
+
+        await update.message.reply_text(f"📢 **Broadcast complete**\n✅ Sent: {sent}\n❌ Failed: {failed}")
+    except Exception as e:
+        logger.error(f"Broadcast error: {e}")
+        await update.message.reply_text("❌ Broadcast failed")
+
+async def wipe_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM users")
+            cursor.execute("DELETE FROM logs")
+            cursor.execute("DELETE FROM purchases")
+        
+        # Clear payment requests
+        with PAYMENT_REQUESTS_LOCK:
+            PAYMENT_REQUESTS.clear()
+
+        await update.message.reply_text("💥 **NUCLEAR WIPE COMPLETE** ⚠️\nDatabase reset!")
+    except Exception as e:
+        logger.error(f"Wipe error: {e}")
+        await update.message.reply_text("❌ Wipe failed")
+
+#═══════════════════════════════════════════════════════ WEBHOOK & FLASK ROUTES ═══════════════════════════════════════════════════════
+
+# Initialize handlers
+def setup_handlers():
+    # COMMAND HANDLERS
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("godstats", god_stats))
+    telegram_app.add_handler(CommandHandler("pending", pending_payments))
+    telegram_app.add_handler(CommandHandler("broadcast", broadcast_cmd))
+    telegram_app.add_handler(CommandHandler("wipeall", wipe_all))
+
+    # CALLBACK QUERY HANDLERS (specific → general)
+    telegram_app.add_handler(CallbackQueryHandler(buy_package_callback, pattern="^buy_"))
+    telegram_app.add_handler(CallbackQueryHandler(confirm_payment, pattern="^confirm_"))
+    telegram_app.add_handler(CallbackQueryHandler(button_handler, pattern="^(approve_|deny_|request_access|cancel|reject_)"))
+
+    # MESSAGE HANDLERS (specific → general)
+    telegram_app.add_handler(MessageHandler(filters.PHOTO, payment_proof_handler))
+    telegram_app.add_handler(MessageHandler(filters.StatusUpdate.USER_SHARED, handle_user_share))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+@app.route("/")
+def home():
+    return jsonify({
+        "status": "🚀 PREMIUM OSINT BOT v3.0 - LIVE 💎",
+        "webhook": f"{WEBHOOK_URL}/{BOT_TOKEN}",
+        "uptime": time.strftime("%Y-%m-%d %H:%M:%S")
+    })
+
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    """Main webhook endpoint - thread-safe"""
+    try:
+        json_data = request.get_json(force=True)
+        if not json_data:
+            return "Invalid JSON", 400
+
+        update = Update.de_json(json_data, telegram_app.bot)
+        if update:
+            # Run in executor to avoid blocking
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(telegram_app.process_update(update))
+            loop.close()
+        
+        return "OK"
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return "ERROR", 500
+
+#═══════════════════════════════════════════════════════ STARTUP ═══════════════════════════════════════════════════════
+
+async def init_bot():
+    """Initialize bot and set webhook"""
+    global telegram_app
+    
+    try:
+        # Create application
+        telegram_app = Application.builder().token(BOT_TOKEN).build()
+        setup_handlers()
+        
+        # Initialize
+        await telegram_app.initialize()
+        
+        # Test bot
+        me = await telegram_app.bot.get_me()
+        logger.info(f"🤖 Bot initialized: @{me.username}")
+        
+        # Set webhook
+        webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
+        await telegram_app.bot.set_webhook(webhook_url)
+        
+        # Verify webhook
+        webhook_info = await telegram_app.bot.get_webhook_info()
+        if webhook_info.url == webhook_url:
+            logger.info(f"✅ Webhook set: {webhook_url}")
+            print("✅ Bot ready! Deployed on:", WEBHOOK_URL)
+        else:
+            logger.error(f"❌ Webhook failed: {webhook_info.url}")
+            
+    except Exception as e:
+        logger.error(f"Bot init failed: {e}")
+        raise
+
+if __name__ == "__main__":
+    # Startup sequence
+    print("🔥 Starting Premium OSINT Bot v3.0...")
+    
+    # Initialize database
+    create_tables()
+    
+    # Initialize bot (async)
+    try:
+        asyncio.run(init_bot())
+    except KeyboardInterrupt:
+        print("\n👋 Shutting down...")
+        exit(0)
+    except Exception as e:
+        logger.error(f"Fatal startup error: {e}")
+        print(f"❌ Failed to start: {e}")
+        exit(1)
+    
+    # Start Flask server
+    port = int(os.getenv("PORT", 5000))
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    
+    print(f"🌐 Flask server starting on port {port}...")
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=debug,
+        threaded=True
+        )
