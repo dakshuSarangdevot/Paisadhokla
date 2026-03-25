@@ -18,9 +18,6 @@ from telegram.ext import (
 from telegram.constants import ParseMode  # ← ADD THIS LINE
 from telegram.constants import ParseMode as ParseModeConst
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-
 import asyncio
 import threading
 
@@ -697,14 +694,10 @@ def webhook():
         telegram_app.bot
     )
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    loop.run_until_complete(
-        telegram_app.process_update(update)
+    asyncio.run_coroutine_threadsafe(
+        telegram_app.process_update(update),
+        loop
     )
-
-    loop.close()
 
     return "OK"
 
