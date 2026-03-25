@@ -91,7 +91,7 @@ timestamp TEXT
 """)
 conn.commit()
 
-═══════════════════════════════════════════════════════ USER SYSTEM ═══════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════ USER SYSTEM ═══════════════════════════════════════════════════════
 
 def ensure_user(uid, username=None, first_name=None):
 conn = get_db()
@@ -134,7 +134,7 @@ cursor = conn.cursor()
 cursor.execute("UPDATE users SET approved=1 WHERE id=?", (str(uid),))
 conn.commit()
 
-═══════════════════════════════════════════════════════ OSINT ENGINE ═══════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════ OSINT ENGINE ═══════════════════════════════════════════════════════
 
 async def search_target(target):
 try:
@@ -202,7 +202,7 @@ result_text = f"""
 """
 await loading_msg.edit_text(result_text, parse_mode=ParseModeConst.MARKDOWN)
 
-═══════════════════════════════════════════════════════ MAIN HANDLERS ═══════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════ MAIN HANDLERS ═══════════════════════════════════════════════════════
 
 async def start(update, context):
 user = update.effective_user
@@ -288,7 +288,7 @@ elif data.startswith("deny_"):
     uid = data.split("_")[1]  
     await query.edit_message_text(f"❌ **DENIED {uid}** ❌")
 
-═══════════════════════════════════════════════════════ PAYMENT SYSTEM ═══════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════ PAYMENT SYSTEM ═══════════════════════════════════════════════════════
 
 async def buy_points(update, context):
 keyboard = []
@@ -396,7 +396,7 @@ await context.bot.send_message(
 )  
 await query.edit_message_text(f"✅ **{user_id} APPROVED** ✅\n💎 {package['points']}pts added!")
 
-═══════════════════════════════════════════════════════ USER FEATURES ═══════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════ USER FEATURES ═══════════════════════════════════════════════════════
 
 async def show_stats(update, context):
 user = get_user(update.effective_user.id)
@@ -441,7 +441,7 @@ await update.message.reply_text(reason)
 return
 await perform_lookup(update, context, target)
 
-═══════════════════════════════════════════════════════ OWNER GOD MODE ═══════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════ OWNER GOD MODE ═══════════════════════════════════════════════════════
 
 async def god_stats(update, context):
 if update.effective_user.id != OWNER_CHAT_ID: return
@@ -518,7 +518,7 @@ cursor.execute("DELETE FROM purchases")
 conn.commit()
 await update.message.reply_text("💥 NUCLEAR WIPE COMPLETE ⚠️")
 
-═══════════════════════════════════════════════════════ WEBHOOK ═══════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════ WEBHOOK ═══════════════════════════════════════════════════════
 
 ALL HANDLERS
 
@@ -555,7 +555,7 @@ asyncio.run(telegram_app.process_update(update))
 
 return "OK"
 
-═══════════════════════════════════════════════════════ STARTUP ═══════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════ STARTUP ═══════════════════════════════════════════════════════
 
 async def init_bot():
 await telegram_app.initialize()
