@@ -523,6 +523,12 @@ telegram_app.add_handler(MessageHandler(filters.StatusUpdate.USER_SHARED, handle
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 telegram_app.add_handler(MessageHandler(filters.PHOTO, payment_proof_handler))
 
+import asyncio
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+loop.run_until_complete(telegram_app.initialize())
+
 @app.route("/")
 def home():
     return "🚀 PREMIUM OSINT BOT v3.0 - LIVE 💎"
