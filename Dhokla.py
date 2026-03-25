@@ -756,6 +756,7 @@ async def init_bot():
     
     try:
         # Create application
+        init_db()
         telegram_app = Application.builder().token(BOT_TOKEN).build()
         setup_handlers()
         
