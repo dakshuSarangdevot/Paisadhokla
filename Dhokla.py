@@ -697,20 +697,37 @@ def home():
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
     """Main webhook endpoint - thread-safe"""
+
+    global telegram_app
+
     try:
+        # Initialize bot if not started (needed for Gunicorn)
+        if telegram_app is None:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            async def lazy_init():
+                global telegram_app
+                telegram_app = Application.builder().token(BOT_TOKEN).build()
+                setup_handlers()
+                await telegram_app.initialize()
+
+            loop.run_until_complete(lazy_init())
+
         json_data = request.get_json(force=True)
         if not json_data:
             return "Invalid JSON", 400
 
         update = Update.de_json(json_data, telegram_app.bot)
+
         if update:
-            # Run in executor to avoid blocking
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(telegram_app.process_update(update))
             loop.close()
-        
+
         return "OK"
+
     except Exception as e:
         logger.error(f"Webhook error: {e}")
         return "ERROR", 500
