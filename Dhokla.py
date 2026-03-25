@@ -677,11 +677,14 @@ def webhook():
         telegram_app.bot
     )
 
-    import asyncio
-    asyncio.get_event_loop().create_task(
-    telegram_app.process_update(update)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    loop.run_until_complete(
+        telegram_app.process_update(update)
     )
-    
+
+    loop.close()
 
     return "OK"
 
