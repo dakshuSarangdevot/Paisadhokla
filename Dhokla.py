@@ -576,3 +576,148 @@ async def god_stats(update, context):
         dashboard,
         parse_mode=ParseModeConst.MARKDOWN
     )
+
+async def pending_payments(update, context):
+
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    if not PAYMENT_REQUESTS:
+        await update.message.reply_text("✅ **No pending payments**")
+        return
+
+    msg = "⏳ **PENDING PAYMENTS:**\n\n"
+
+    for uid, data in PAYMENT_REQUESTS.items():
+        if data['status'] == 'pending':
+            pkg = data['package']
+            msg += f"• `{uid}` - {pkg['name']} (₹{pkg['price']})\n"
+
+    await update.message.reply_text(msg, parse_mode=ParseModeConst.MARKDOWN)
+
+
+async def broadcast_cmd(update, context):
+
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: /broadcast Your message",
+            parse_mode=ParseModeConst.MARKDOWN
+        )
+        return
+
+    message = " ".join(context.args)
+    sent = 0
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    for user in cursor.execute("SELECT id FROM users WHERE approved=1"):
+        try:
+            await context.bot.send_message(user['id'], message)
+            sent += 1
+        except:
+            pass
+
+    await update.message.reply_text(f"📢 **Sent to {sent} users**")
+
+
+async def wipe_all(update, context):
+
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM users")
+    cursor.execute("DELETE FROM logs")
+    cursor.execute("DELETE FROM purchases")
+
+    conn.commit()
+
+    await update.message.reply_text("💥 NUCLEAR WIPE COMPLETE ⚠️")
+
+
+#═══════════════════════════════════════════════════════ WEBHOOK ═══════════════════════════════════════════════════════
+
+# ALL HANDLERS
+
+telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(CommandHandler("godstats", god_stats))
+telegram_app.add_handler(CommandHandler("pending", pending_payments))
+telegram_app.add_handler(CommandHandler("broadcast", broadcast_cmd))
+telegram_app.add_handler(CommandHandler("wipeall", wipe_all))
+
+telegram_app.add_handler(CallbackQueryHandler(button_handler))
+telegram_app.add_handler(CallbackQueryHandler(buy_package_callback, pattern="^buy_"))
+telegram_app.add_handler(CallbackQueryHandler(confirm_payment, pattern="^confirm_"))
+
+telegram_app.add_handler(MessageHandler(filters.StatusUpdate.USER_SHARED, handle_user_share))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+telegram_app.add_handler(MessageHandler(filters.PHOTO, payment_proof_handler))
+
+
+import asyncio
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+loop.run_until_complete(telegram_app.initialize())
+
+
+@app.route("/")
+def home():
+    return "🚀 PREMIUM OSINT BOT v3.0 - LIVE 💎"
+
+
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+
+    update = Update.de_json(
+        request.get_json(force=True),
+        telegram_app.bot
+    )
+
+    import asyncio
+    asyncio.run(
+        telegram_app.process_update(update)
+    )
+
+    return "OK"
+
+
+#═══════════════════════════════════════════════════════ STARTUP ═══════════════════════════════════════════════════════
+
+async def init_bot():
+
+    await telegram_app.initialize()
+
+    await telegram_app.bot.set_webhook(
+        f"{WEBHOOK_URL}/{BOT_TOKEN}"
+    )
+
+    logger.info("🚀 Bot initialized & webhook set!")
+    print("✅ Bot ready! Deployed on:", WEBHOOK_URL)
+
+
+if name == "main":
+
+    # Validate ENV
+    if not all([BOT_TOKEN, str(OWNER_CHAT_ID), WEBHOOK_URL]):
+        print("❌ Missing ENV: BOT_TOKEN, OWNER_CHAT_ID, WEBHOOK_URL")
+        exit(1)
+
+    print("🔥 Starting Premium OSINT Bot v3.0...")
+
+    asyncio.run(init_bot())
+
+    # Start Flask
+    port = int(os.getenv("PORT", 5000))
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False
+        )
