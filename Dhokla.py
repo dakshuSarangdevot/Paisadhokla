@@ -54,76 +54,54 @@ conn.commit()
 # ---------------- USER SYSTEM ----------------
 
 def ensure_user(uid):
-
     cursor.execute(
         "INSERT OR IGNORE INTO users(id,points,approved) VALUES(?,?,?)",
         (str(uid),0,0)
     )
-
     conn.commit()
 
 def get_points(uid):
-
     ensure_user(uid)
-
-    cursor.execute(
-        "SELECT points FROM users WHERE id=?",
-        (str(uid),)
-    )
-
+    cursor.execute("SELECT points FROM users WHERE id=?", (str(uid),))
     return cursor.fetchone()[0]
 
 def add_points(uid,amount):
-
     ensure_user(uid)
-
     cursor.execute(
         "UPDATE users SET points = points + ? WHERE id=?",
         (amount,str(uid))
     )
-
     conn.commit()
 
 def remove_points(uid,amount):
-
     ensure_user(uid)
-
     cursor.execute(
         "UPDATE users SET points = MAX(points-?,0) WHERE id=?",
         (amount,str(uid))
     )
-
     conn.commit()
 
 def is_approved(uid):
-
     ensure_user(uid)
-
     cursor.execute(
         "SELECT approved FROM users WHERE id=?",
         (str(uid),)
     )
-
     return cursor.fetchone()[0] == 1
 
 def approve_user(uid):
-
     ensure_user(uid)
-
     cursor.execute(
         "UPDATE users SET approved=1 WHERE id=?",
         (str(uid),)
     )
-
     conn.commit()
 
 def disapprove_user(uid):
-
     cursor.execute(
         "UPDATE users SET approved=0 WHERE id=?",
         (str(uid),)
     )
-
     conn.commit()
 
 # ---------------- API ----------------
@@ -159,7 +137,10 @@ async def lookup(update,context,target):
 
     if not is_approved(user.id):
 
-        await update.message.reply_text("⛔ You are not approved yet.")
+        await update.message.reply_text(
+            "⛔ You are not approved yet."
+        )
+
         return
 
     now = time.time()
@@ -210,7 +191,6 @@ async def lookup(update,context,target):
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     user=update.effective_user
-
     ensure_user(user.id)
 
     balance=get_points(user.id)
@@ -218,7 +198,7 @@ async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
     keyboard=[
         [
             KeyboardButton(
-                "🎯 Target",
+                "🎯 Select Telegram Target",
                 request_user=KeyboardButtonRequestUser(
                     request_id=1,
                     user_is_bot=False
@@ -243,7 +223,7 @@ async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
 Send:
 • Telegram ID
 • @username
-• or press Target
+• or press 🎯 Select Telegram Target
 """
 
     await update.message.reply_text(msg,parse_mode="Markdown",reply_markup=markup)
@@ -287,24 +267,26 @@ async def admin_buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
         approve_user(uid)
 
-        await query.edit_message_text(
-            f"✅ User {uid} approved"
-        )
+        await query.edit_message_text(f"✅ User {uid} approved")
 
     elif data.startswith("reject_"):
 
         disapprove_user(uid)
 
-        await query.edit_message_text(
-            f"❌ User {uid} rejected"
-        )
+        await query.edit_message_text(f"❌ User {uid} rejected")
 
-# ---------------- USER PICKER ----------------
+# ---------------- TARGET HANDLER ----------------
 
-async def user_shared(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def user_shared(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    uid = update.message.user_shared.user_id
-    await lookup(update,context,str(uid))
+    shared = update.message.user_shared
+
+    if not shared:
+        return
+
+    target_id = shared.user_id
+
+    await lookup(update, context, str(target_id))
 
 # ---------------- STATS ----------------
 
@@ -352,10 +334,10 @@ ADMIN:
 /help
 /stats
 
-Send:
+Use:
 Telegram ID
 @username
-or press Target
+🎯 Target button
 """
 
     await update.message.reply_text(msg)
@@ -486,7 +468,7 @@ telegram_app.add_handler(CommandHandler("addpoints",addpoints))
 telegram_app.add_handler(CallbackQueryHandler(admin_buttons))
 
 telegram_app.add_handler(
-    MessageHandler(filters.StatusUpdate.USER_SHARED,user_shared)
+    MessageHandler(filters.USER_SHARED,user_shared)
 )
 
 telegram_app.add_handler(
