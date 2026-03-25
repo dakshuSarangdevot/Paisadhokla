@@ -531,7 +531,8 @@ def home():
 def webhook():
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
     if update:
-        asyncio.create_task(telegram_app.process_update(update))
+        import asyncio
+asyncio.run(telegram_app.process_update(update))
     return "OK"
 
 # ═══════════════════════════════════════════════════════ STARTUP ═══════════════════════════════════════════════════════
