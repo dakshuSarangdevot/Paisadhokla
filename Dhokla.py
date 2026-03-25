@@ -19,8 +19,8 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    filters,
-    CallbackQueryHandler
+    CallbackQueryHandler,
+    filters
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -36,12 +36,7 @@ RATE_LIMIT = 5
 app = Flask(__name__)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-# ---------- EVENT LOOP (stable) ----------
-
-bot_loop = asyncio.new_event_loop()
-asyncio.set_event_loop(bot_loop)
-
-# ---------- DATABASE ----------
+# ---------------- DATABASE ----------------
 
 conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -56,7 +51,7 @@ approved INTEGER DEFAULT 0
 
 conn.commit()
 
-# ---------- USER SYSTEM ----------
+# ---------------- USER SYSTEM ----------------
 
 def ensure_user(uid):
 
@@ -131,7 +126,7 @@ def disapprove_user(uid):
 
     conn.commit()
 
-# ---------- API ----------
+# ---------------- API ----------------
 
 async def fetch_api(target):
 
@@ -154,7 +149,7 @@ async def fetch_api(target):
     except:
         return None
 
-# ---------- LOOKUP ----------
+# ---------------- LOOKUP ----------------
 
 last_query = {}
 
@@ -164,10 +159,7 @@ async def lookup(update,context,target):
 
     if not is_approved(user.id):
 
-        await update.message.reply_text(
-            "⛔ You are not approved yet."
-        )
-
+        await update.message.reply_text("⛔ You are not approved yet.")
         return
 
     now = time.time()
@@ -213,7 +205,7 @@ async def lookup(update,context,target):
 
     await update.message.reply_text(msg,parse_mode="Markdown")
 
-# ---------- START ----------
+# ---------------- START ----------------
 
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -266,10 +258,10 @@ Send:
         ])
 
         notify=f"""
-🚨 USER REQUESTED ACCESS
+🚨 USER REQUEST
 
-👤 Name: {user.first_name}
-🆔 ID: {user.id}
+👤 {user.first_name}
+🆔 {user.id}
 """
 
         await context.bot.send_message(
@@ -278,7 +270,7 @@ Send:
             reply_markup=keyboard
         )
 
-# ---------- ADMIN BUTTONS ----------
+# ---------------- ADMIN BUTTONS ----------------
 
 async def admin_buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -289,7 +281,6 @@ async def admin_buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
         return
 
     data = query.data
-
     uid = data.split("_")[1]
 
     if data.startswith("approve_"):
@@ -308,14 +299,14 @@ async def admin_buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
             f"❌ User {uid} rejected"
         )
 
-# ---------- USER PICKER ----------
+# ---------------- USER PICKER ----------------
 
 async def user_shared(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     uid = update.message.user_shared.user_id
     await lookup(update,context,str(uid))
 
-# ---------- STATS ----------
+# ---------------- STATS ----------------
 
 async def stats(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -331,7 +322,7 @@ Points: `{balance}`
 
     await update.message.reply_text(msg,parse_mode="Markdown")
 
-# ---------- HELP ----------
+# ---------------- HELP ----------------
 
 async def help_cmd(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -361,14 +352,15 @@ ADMIN:
 /help
 /stats
 
-Use Target button or send:
-• Telegram ID
-• @username
+Send:
+Telegram ID
+@username
+or press Target
 """
 
     await update.message.reply_text(msg)
 
-# ---------- ADMIN PANEL ----------
+# ---------------- ADMIN PANEL ----------------
 
 async def admin(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -390,7 +382,7 @@ Approved: {approved}
 
     await update.message.reply_text(msg)
 
-# ---------- BROADCAST ----------
+# ---------------- BROADCAST ----------------
 
 async def broadcast(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -415,7 +407,7 @@ async def broadcast(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"Sent to {sent} users")
 
-# ---------- ADMIN COMMANDS ----------
+# ---------------- ADMIN COMMANDS ----------------
 
 async def approve(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -449,7 +441,7 @@ async def addpoints(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("Points added")
 
-# ---------- TEXT HANDLER ----------
+# ---------------- TEXT HANDLER ----------------
 
 async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -480,7 +472,7 @@ async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
         await lookup(update,context,text)
 
-# ---------- HANDLERS ----------
+# ---------------- HANDLERS ----------------
 
 telegram_app.add_handler(CommandHandler("start",start))
 telegram_app.add_handler(CommandHandler("help",help_cmd))
@@ -491,9 +483,7 @@ telegram_app.add_handler(CommandHandler("approve",approve))
 telegram_app.add_handler(CommandHandler("disapprove",disapprove))
 telegram_app.add_handler(CommandHandler("addpoints",addpoints))
 
-telegram_app.add_handler(
-    CallbackQueryHandler(admin_buttons)
-)
+telegram_app.add_handler(CallbackQueryHandler(admin_buttons))
 
 telegram_app.add_handler(
     MessageHandler(filters.StatusUpdate.USER_SHARED,user_shared)
@@ -503,7 +493,7 @@ telegram_app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND,text_handler)
 )
 
-# ---------- WEBHOOK ----------
+# ---------------- WEBHOOK ----------------
 
 @app.route("/")
 def home():
@@ -512,22 +502,23 @@ def home():
 @app.route(f"/{BOT_TOKEN}",methods=["POST"])
 def webhook():
 
-    data = request.get_json(force=True)
-
-    update = Update.de_json(data, telegram_app.bot)
-
-    bot_loop.call_soon_threadsafe(
-        asyncio.create_task,
-        telegram_app.process_update(update)
+    update = Update.de_json(
+        request.get_json(force=True),
+        telegram_app.bot
     )
+
+    async def process():
+        await telegram_app.process_update(update)
+
+    asyncio.run(process())
 
     return "ok"
 
-# ---------- START ----------
+# ---------------- START ----------------
 
 async def setup():
     await telegram_app.initialize()
     await telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
     print("Webhook set successfully")
 
-bot_loop.run_until_complete(setup())
+asyncio.run(setup())
