@@ -109,14 +109,11 @@ def disapprove_user(uid):
 async def fetch_api(target):
 
     try:
-
         async with httpx.AsyncClient(timeout=10) as client:
-
             r = await client.get(
                 API_URL,
                 params={"key":API_KEY,"id":target}
             )
-
             data = r.json()
 
             if "result" not in data:
@@ -136,18 +133,13 @@ async def lookup(update,context,target):
     user = update.effective_user
 
     if not is_approved(user.id):
-
-        await update.message.reply_text(
-            "⛔ You are not approved yet."
-        )
-
+        await update.message.reply_text("⛔ You are not approved yet.")
         return
 
     now = time.time()
 
     if user.id in last_query and now-last_query[user.id] < RATE_LIMIT:
-
-        await update.message.reply_text("⏳ Slow down")
+        await update.message.reply_text("⏳ Slow down.")
         return
 
     last_query[user.id] = now
@@ -155,17 +147,17 @@ async def lookup(update,context,target):
     points = get_points(user.id)
 
     if points < SEARCH_COST:
-
-        await update.message.reply_text("❌ Not enough points")
+        await update.message.reply_text("❌ Not enough points.")
         return
 
     remove_points(user.id,SEARCH_COST)
 
+    loading = await update.message.reply_text("🔎 Searching database...")
+
     result = await fetch_api(target)
 
     if not result:
-
-        await update.message.reply_text("❌ No record found")
+        await loading.edit_text("❌ No record found.")
         return
 
     msg=f"""
@@ -184,7 +176,7 @@ async def lookup(update,context,target):
 ━━━━━━━━━━━━━━
 """
 
-    await update.message.reply_text(msg,parse_mode="Markdown")
+    await loading.edit_text(msg,parse_mode="Markdown")
 
 # ---------------- START ----------------
 
@@ -223,7 +215,7 @@ async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
 Send:
 • Telegram ID
 • @username
-• or press 🎯 Select Telegram Target
+• or press 🎯 Target
 """
 
     await update.message.reply_text(msg,parse_mode="Markdown",reply_markup=markup)
@@ -237,22 +229,28 @@ Send:
             ]
         ])
 
-        notify=f"""
-🚨 USER REQUEST
-
-👤 {user.first_name}
-🆔 {user.id}
-"""
-
         await context.bot.send_message(
             OWNER_CHAT_ID,
-            notify,
+            f"🚨 Access Request\n\n{user.first_name}\nID: {user.id}",
             reply_markup=keyboard
         )
 
+# ---------------- TARGET HANDLER ----------------
+
+async def user_shared(update,context):
+
+    shared = update.message.user_shared
+
+    if not shared:
+        return
+
+    target_id = shared.user_id
+
+    await lookup(update,context,str(target_id))
+
 # ---------------- ADMIN BUTTONS ----------------
 
-async def admin_buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def admin_buttons(update,context):
 
     query = update.callback_query
     await query.answer()
@@ -264,49 +262,33 @@ async def admin_buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
     uid = data.split("_")[1]
 
     if data.startswith("approve_"):
-
         approve_user(uid)
-
         await query.edit_message_text(f"✅ User {uid} approved")
 
-    elif data.startswith("reject_"):
-
+    if data.startswith("reject_"):
         disapprove_user(uid)
-
         await query.edit_message_text(f"❌ User {uid} rejected")
-
-# ---------------- TARGET HANDLER ----------------
-
-async def user_shared(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    shared = update.message.user_shared
-
-    if not shared:
-        return
-
-    target_id = shared.user_id
-
-    await lookup(update, context, str(target_id))
 
 # ---------------- STATS ----------------
 
-async def stats(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def stats(update,context):
 
     uid = update.effective_user.id
     balance = get_points(uid)
 
-    msg=f"""
+    await update.message.reply_text(
+f"""
 📊 YOUR STATS
 
 User ID: `{uid}`
 Points: `{balance}`
-"""
-
-    await update.message.reply_text(msg,parse_mode="Markdown")
+""",
+parse_mode="Markdown"
+)
 
 # ---------------- HELP ----------------
 
-async def help_cmd(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def help_cmd(update,context):
 
     if update.effective_user.id == OWNER_CHAT_ID:
 
@@ -344,7 +326,7 @@ Telegram ID
 
 # ---------------- ADMIN PANEL ----------------
 
-async def admin(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def admin(update,context):
 
     if update.effective_user.id != OWNER_CHAT_ID:
         return
@@ -355,20 +337,24 @@ async def admin(update:Update,context:ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT COUNT(*) FROM users WHERE approved=1")
     approved = cursor.fetchone()[0]
 
-    msg=f"""
+    await update.message.reply_text(
+f"""
 ADMIN PANEL
 
 Users: {total}
 Approved: {approved}
 """
-
-    await update.message.reply_text(msg)
+)
 
 # ---------------- BROADCAST ----------------
 
-async def broadcast(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def broadcast(update,context):
 
     if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /broadcast MESSAGE")
         return
 
     message=" ".join(context.args)
@@ -380,40 +366,50 @@ async def broadcast(update:Update,context:ContextTypes.DEFAULT_TYPE):
     for row in cursor.fetchall():
 
         try:
-
             await context.bot.send_message(row[0],message)
             sent+=1
-
         except:
             pass
 
-    await update.message.reply_text(f"Sent to {sent} users")
+    await update.message.reply_text(f"Broadcast sent to {sent} users")
 
 # ---------------- ADMIN COMMANDS ----------------
 
-async def approve(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def approve(update,context):
 
     if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /approve USER_ID")
         return
 
     uid=context.args[0]
     approve_user(uid)
 
-    await update.message.reply_text("User approved")
+    await update.message.reply_text("User approved.")
 
-async def disapprove(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def disapprove(update,context):
 
     if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /disapprove USER_ID")
         return
 
     uid=context.args[0]
     disapprove_user(uid)
 
-    await update.message.reply_text("User disapproved")
+    await update.message.reply_text("User disapproved.")
 
-async def addpoints(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def addpoints(update,context):
 
     if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text("Usage: /addpoints USER_ID AMOUNT")
         return
 
     uid=context.args[0]
@@ -421,11 +417,11 @@ async def addpoints(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     add_points(uid,pts)
 
-    await update.message.reply_text("Points added")
+    await update.message.reply_text("Points added.")
 
 # ---------------- TEXT HANDLER ----------------
 
-async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def text_handler(update,context):
 
     text=update.message.text
 
@@ -440,18 +436,14 @@ async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
     if text.startswith("@"):
 
         try:
-
             chat=await context.bot.get_chat(text)
             await lookup(update,context,str(chat.id))
-
         except:
-
             await update.message.reply_text("❌ Username not found")
 
         return
 
     if text.isdigit():
-
         await lookup(update,context,text)
 
 # ---------------- HANDLERS ----------------
@@ -468,7 +460,7 @@ telegram_app.add_handler(CommandHandler("addpoints",addpoints))
 telegram_app.add_handler(CallbackQueryHandler(admin_buttons))
 
 telegram_app.add_handler(
-    MessageHandler(filters.USER_SHARED,user_shared)
+    MessageHandler(filters.StatusUpdate.USER_SHARED,user_shared)
 )
 
 telegram_app.add_handler(
