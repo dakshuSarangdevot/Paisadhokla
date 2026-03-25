@@ -509,4 +509,47 @@ async def wipe_all(update, context):
 
 # ALL HANDLERS
 telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add
+telegram_app.add_handler(CommandHandler("godstats", god_stats))
+telegram_app.add_handler(CommandHandler("pending", pending_payments))
+telegram_app.add_handler(CommandHandler("broadcast", broadcast_cmd))
+telegram_app.add_handler(CommandHandler("wipeall", wipe_all))
+
+telegram_app.add_handler(CallbackQueryHandler(button_handler))
+telegram_app.add_handler(CallbackQueryHandler(buy_package_callback, pattern="^buy_"))
+telegram_app.add_handler(CallbackQueryHandler(confirm_payment, pattern="^confirm_"))
+
+telegram_app.add_handler(MessageHandler(filters.StatusUpdate.USER_SHARED, handle_user_share))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+telegram_app.add_handler(MessageHandler(filters.PHOTO, payment_proof_handler))
+
+@app.route("/")
+def home():
+    return "🚀 PREMIUM OSINT BOT v3.0 - LIVE 💎"
+
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+    if update:
+        asyncio.create_task(telegram_app.process_update(update))
+    return "OK"
+
+# ═══════════════════════════════════════════════════════ STARTUP ═══════════════════════════════════════════════════════
+
+async def init_bot():
+    await telegram_app.initialize()
+    await telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    logger.info("🚀 Bot initialized & webhook set!")
+    print("✅ Bot ready! Deployed on:", WEBHOOK_URL)
+
+if __name__ == "__main__":
+    # Validate ENV
+    if not all([BOT_TOKEN, str(OWNER_CHAT_ID), WEBHOOK_URL]):
+        print("❌ Missing ENV: BOT_TOKEN, OWNER_CHAT_ID, WEBHOOK_URL")
+        exit(1)
+    
+    print("🔥 Starting Premium OSINT Bot v3.0...")
+    asyncio.run(init_bot())
+    
+    # Start Flask
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
