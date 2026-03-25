@@ -18,12 +18,12 @@ CallbackQueryHandler, filters
 from telegram.constants import ParseMode  # ← ADD THIS LINE
 from telegram.constants import ParseMode as ParseModeConst
 
-Logging
+#Logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(name)
 
-ENV VARS
+#ENV VARS
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID"))
@@ -33,7 +33,7 @@ API_URL = "https://ayaanmods.site/tg2num.php"
 API_KEY = "annonymoustgtonum"
 SEARCH_COST = 5
 
-Premium Packages
+#Premium Packages
 
 PREMIUM_PACKAGES = [
 {"id": "basic", "name": "🟢 BASIC", "points": 50, "price": 500},
@@ -41,7 +41,7 @@ PREMIUM_PACKAGES = [
 {"id": "elite", "name": "🔴 ELITE", "points": 1000, "price": 7000}
 ]
 
-Global payment tracking
+#Global payment tracking
 
 PAYMENT_REQUESTS = {}
 
