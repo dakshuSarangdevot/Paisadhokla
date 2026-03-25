@@ -18,6 +18,9 @@ from telegram.ext import (
 from telegram.constants import ParseMode  # ← ADD THIS LINE
 from telegram.constants import ParseMode as ParseModeConst
 
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
 # Logging
 
 logging.basicConfig(level=logging.INFO)
