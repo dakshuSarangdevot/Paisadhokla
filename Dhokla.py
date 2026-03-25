@@ -702,7 +702,7 @@ async def init_bot():
     print("✅ Bot ready! Deployed on:", WEBHOOK_URL)
 
 
-if name == "main":
+if __name__ == "main":
 
     # Validate ENV
     if not all([BOT_TOKEN, str(OWNER_CHAT_ID), WEBHOOK_URL]):
