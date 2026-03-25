@@ -9,7 +9,9 @@ from telegram import (
     Update,
     ReplyKeyboardMarkup,
     KeyboardButton,
-    KeyboardButtonRequestUser
+    KeyboardButtonRequestUser,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
 )
 
 from telegram.ext import (
@@ -17,7 +19,8 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    filters
+    filters,
+    CallbackQueryHandler
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -33,9 +36,12 @@ RATE_LIMIT = 5
 app = Flask(__name__)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-last_query = {}
+# ---------- EVENT LOOP (stable) ----------
 
-# ---------------- DATABASE ----------------
+bot_loop = asyncio.new_event_loop()
+asyncio.set_event_loop(bot_loop)
+
+# ---------- DATABASE ----------
 
 conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -48,15 +54,9 @@ approved INTEGER DEFAULT 0
 )
 """)
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS protected(
-tgid TEXT PRIMARY KEY
-)
-""")
-
 conn.commit()
 
-# ---------------- USER SYSTEM ----------------
+# ---------- USER SYSTEM ----------
 
 def ensure_user(uid):
 
@@ -78,7 +78,7 @@ def get_points(uid):
 
     return cursor.fetchone()[0]
 
-def add_points(uid, amount):
+def add_points(uid,amount):
 
     ensure_user(uid)
 
@@ -89,7 +89,7 @@ def add_points(uid, amount):
 
     conn.commit()
 
-def remove_points(uid, amount):
+def remove_points(uid,amount):
 
     ensure_user(uid)
 
@@ -131,7 +131,7 @@ def disapprove_user(uid):
 
     conn.commit()
 
-# ---------------- API ----------------
+# ---------- API ----------
 
 async def fetch_api(target):
 
@@ -154,7 +154,9 @@ async def fetch_api(target):
     except:
         return None
 
-# ---------------- LOOKUP ----------------
+# ---------- LOOKUP ----------
+
+last_query = {}
 
 async def lookup(update,context,target):
 
@@ -211,11 +213,12 @@ async def lookup(update,context,target):
 
     await update.message.reply_text(msg,parse_mode="Markdown")
 
-# ---------------- START ----------------
+# ---------- START ----------
 
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     user=update.effective_user
+
     ensure_user(user.id)
 
     balance=get_points(user.id)
@@ -255,35 +258,69 @@ Send:
 
     if not is_approved(user.id):
 
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Approve",callback_data=f"approve_{user.id}"),
+                InlineKeyboardButton("❌ Reject",callback_data=f"reject_{user.id}")
+            ]
+        ])
+
         notify=f"""
 🚨 USER REQUESTED ACCESS
 
 👤 Name: {user.first_name}
 🆔 ID: {user.id}
-
-Commands:
-/approve {user.id}
-/disapprove {user.id}
 """
 
         await context.bot.send_message(
             OWNER_CHAT_ID,
-            notify
+            notify,
+            reply_markup=keyboard
         )
 
-# ---------------- USER PICKER ----------------
+# ---------- ADMIN BUTTONS ----------
+
+async def admin_buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    if update.effective_user.id != OWNER_CHAT_ID:
+        return
+
+    data = query.data
+
+    uid = data.split("_")[1]
+
+    if data.startswith("approve_"):
+
+        approve_user(uid)
+
+        await query.edit_message_text(
+            f"✅ User {uid} approved"
+        )
+
+    elif data.startswith("reject_"):
+
+        disapprove_user(uid)
+
+        await query.edit_message_text(
+            f"❌ User {uid} rejected"
+        )
+
+# ---------- USER PICKER ----------
 
 async def user_shared(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    uid=update.message.user_shared.user_id
+    uid = update.message.user_shared.user_id
     await lookup(update,context,str(uid))
 
-# ---------------- STATS ----------------
+# ---------- STATS ----------
 
 async def stats(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    uid=update.effective_user.id
-    balance=get_points(uid)
+    uid = update.effective_user.id
+    balance = get_points(uid)
 
     msg=f"""
 📊 YOUR STATS
@@ -294,7 +331,7 @@ Points: `{balance}`
 
     await update.message.reply_text(msg,parse_mode="Markdown")
 
-# ---------------- HELP ----------------
+# ---------- HELP ----------
 
 async def help_cmd(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -311,7 +348,6 @@ ADMIN:
 /approve ID
 /disapprove ID
 /addpoints ID AMOUNT
-/protectid ID
 /broadcast MESSAGE
 /admin
 """
@@ -332,7 +368,7 @@ Use Target button or send:
 
     await update.message.reply_text(msg)
 
-# ---------------- ADMIN PANEL ----------------
+# ---------- ADMIN PANEL ----------
 
 async def admin(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -354,7 +390,7 @@ Approved: {approved}
 
     await update.message.reply_text(msg)
 
-# ---------------- BROADCAST ----------------
+# ---------- BROADCAST ----------
 
 async def broadcast(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -379,7 +415,7 @@ async def broadcast(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"Sent to {sent} users")
 
-# ---------------- ADMIN COMMANDS ----------------
+# ---------- ADMIN COMMANDS ----------
 
 async def approve(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -413,7 +449,7 @@ async def addpoints(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("Points added")
 
-# ---------------- TEXT HANDLER ----------------
+# ---------- TEXT HANDLER ----------
 
 async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
@@ -444,7 +480,7 @@ async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
         await lookup(update,context,text)
 
-# ---------------- HANDLERS ----------------
+# ---------- HANDLERS ----------
 
 telegram_app.add_handler(CommandHandler("start",start))
 telegram_app.add_handler(CommandHandler("help",help_cmd))
@@ -456,6 +492,10 @@ telegram_app.add_handler(CommandHandler("disapprove",disapprove))
 telegram_app.add_handler(CommandHandler("addpoints",addpoints))
 
 telegram_app.add_handler(
+    CallbackQueryHandler(admin_buttons)
+)
+
+telegram_app.add_handler(
     MessageHandler(filters.StatusUpdate.USER_SHARED,user_shared)
 )
 
@@ -463,7 +503,7 @@ telegram_app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND,text_handler)
 )
 
-# ---------------- WEBHOOK ----------------
+# ---------- WEBHOOK ----------
 
 @app.route("/")
 def home():
@@ -472,25 +512,22 @@ def home():
 @app.route(f"/{BOT_TOKEN}",methods=["POST"])
 def webhook():
 
-    update=Update.de_json(
-        request.get_json(force=True),
-        telegram_app.bot
-    )
+    data = request.get_json(force=True)
 
-    asyncio.run(
+    update = Update.de_json(data, telegram_app.bot)
+
+    bot_loop.call_soon_threadsafe(
+        asyncio.create_task,
         telegram_app.process_update(update)
     )
 
     return "ok"
 
-# ---------------- START ----------------
+# ---------- START ----------
 
 async def setup():
-
     await telegram_app.initialize()
+    await telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    print("Webhook set successfully")
 
-    await telegram_app.bot.set_webhook(
-        f"{WEBHOOK_URL}/{BOT_TOKEN}"
-    )
-
-asyncio.run(setup())
+bot_loop.run_until_complete(setup())
