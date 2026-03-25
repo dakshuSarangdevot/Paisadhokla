@@ -19,6 +19,22 @@ from telegram.ext import (
 from telegram.constants import ParseMode as ParseModeConst
 from telegram.error import TelegramError, BadRequest
 
+def init_db():
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
+        balance INTEGER DEFAULT 0,
+        join_date TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
 # Logging setup
 logging.basicConfig(
     level=logging.INFO,
