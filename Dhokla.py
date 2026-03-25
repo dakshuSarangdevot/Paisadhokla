@@ -681,8 +681,9 @@ def webhook():
     )
 
     import asyncio
-    asyncio.run(
-        telegram_app.process_update(update)
+    asyncio.get_event_loop().create_task(
+    telegram_app.process_update(update)
+    )
     )
 
     return "OK"
