@@ -25,7 +25,7 @@ def init_db():
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY,
         username TEXT,
         first_name TEXT,
         balance INTEGER DEFAULT 0,
@@ -35,6 +35,7 @@ def init_db():
 
     conn.commit()
     conn.close()
+
 # Logging setup
 logging.basicConfig(
     level=logging.INFO,
