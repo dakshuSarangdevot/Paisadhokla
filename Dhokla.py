@@ -53,7 +53,7 @@ telegram_app = Application.builder().token(BOT_TOKEN).build()
 local = threading.local()
 
 def get_db():
-if not hasattr(local, 'conn'):
+    if not hasattr(local, 'conn'):
 local.conn = sqlite3.connect("database.db", check_same_thread=False)
 local.conn.row_factory = sqlite3.Row
 create_tables(local.conn)
