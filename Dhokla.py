@@ -48,7 +48,7 @@ PAYMENT_REQUESTS = {}
 app = Flask(name)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-Thread-safe Database
+# Thread-safe Database
 
 local = threading.local()
 
