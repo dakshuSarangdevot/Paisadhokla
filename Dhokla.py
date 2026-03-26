@@ -716,7 +716,8 @@ async def wipe_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ====================== HANDLER SETUP ======================
-def setup_handlers(application: Application):
+def setup_handlers(application):
+    # Command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("godstats", god_stats))
     application.add_handler(CommandHandler("pending", pending_payments))
@@ -726,12 +727,16 @@ def setup_handlers(application: Application):
     application.add_handler(CommandHandler("removepoints", remove_points))
     application.add_handler(CommandHandler("history", show_history))
 
+    # Callback query handlers
     application.add_handler(CallbackQueryHandler(buy_package_callback, pattern="^buy_"))
     application.add_handler(CallbackQueryHandler(confirm_payment, pattern="^confirm_"))
     application.add_handler(CallbackQueryHandler(button_handler, pattern="^(approve_|deny_|request_access|cancel|reject_)"))
 
+    # Message handlers
     application.add_handler(MessageHandler(filters.PHOTO, payment_proof_handler))
     application.add_handler(MessageHandler(filters.StatusUpdate.USER_SHARED, handle_user_share))
+    
+    # IMPORTANT: This is the fixed line
     application.add_handler(MessageHandler(filters.TEXT & \~filters.COMMAND, handle_text))
 
 
