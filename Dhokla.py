@@ -737,7 +737,7 @@ def setup_handlers(application):
     application.add_handler(MessageHandler(filters.StatusUpdate.USER_SHARED, handle_user_share))
     
     # IMPORTANT: This is the fixed line
-    application.add_handler(MessageHandler(filters.TEXT & \~filters.COMMAND, handle_text))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
 
 # ====================== FLASK HEALTH (Render free tier) ======================
