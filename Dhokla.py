@@ -759,6 +759,8 @@ async def run_bot():
     setup_handlers(telegram_app)
 
     await telegram_app.initialize()
+    await telegram_app.bot.delete_webhook(drop_pending_updates=True)
+    logger.info("✅ Old webhook deleted - now using polling only")
     await telegram_app.start()
 
     me = await telegram_app.bot.get_me()
