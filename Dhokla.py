@@ -739,6 +739,12 @@ def setup_handlers(application):
     # IMPORTANT: This is the fixed line
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
+# ==================Uptime Bot=================================================
+
+@app.route("/ping")
+def ping():
+    return jsonify({"status": "alive", "time": datetime.now().isoformat()})
+
 
 # ====================== FLASK HEALTH (Render free tier) ======================
 @app.route("/")
