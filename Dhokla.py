@@ -779,15 +779,12 @@ def run_flask():
 
 
 if __name__ == "__main__":
-    print("🔥 Starting Premium OSINT Bot v3.1 (Render Free Optimized)...")
-
     create_tables()
-
-    # Start Flask health check in background (required for Render web dyno)
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-
-    # Run Telegram bot with pure async polling (no webhook, no event loop conflicts)
+    
+    # Flask health check in background (required by Render)
+    threading.Thread(target=run_flask, daemon=True).start()
+    
+    # Run Telegram bot with polling
     try:
         asyncio.run(run_bot())
     except KeyboardInterrupt:
