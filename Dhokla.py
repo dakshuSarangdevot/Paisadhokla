@@ -757,19 +757,18 @@ async def run_bot():
     global telegram_app
     telegram_app = Application.builder().token(BOT_TOKEN).build()
     setup_handlers(telegram_app)
-
+    
     await telegram_app.initialize()
-    await telegram_app.bot.delete_webhook(drop_pending_updates=True)
-    logger.info("✅ Old webhook deleted - now using polling only")
     await telegram_app.start()
-
+    
+    # Delete any old webhook so Telegram stops sending to the URL
+    await telegram_app.bot.delete_webhook(drop_pending_updates=True)
+    logger.info("✅ Old webhook deleted - Running in polling mode")
+    
     me = await telegram_app.bot.get_me()
-    logger.info(f"🤖 Bot @{me.username} started successfully (Polling)")
-
-    await telegram_app.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
-    )
+    logger.info(f"🤖 Bot @{me.username} is now running with polling")
+    
+    await telegram_app.run_polling(drop_pending_updates=True)
 
 
 # ====================== STARTUP (Optimized for Render 512MB) ======================
